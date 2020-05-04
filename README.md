@@ -1,1 +1,1 @@
-# ocp-performance
+# This repo contains my notes related to OpenShift performance
