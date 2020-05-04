@@ -1,0 +1,90 @@
+= Testing your OpenShift cluster performance
+
+In this article we are going to explore the `OSE-Cluster-Loader` project to inject load on an OpenShift cluster. This process has been used either with clusters at versions 3.11 and 4.3.
+
+[NOTE]
+====
+The workstation used to run the cluster load has been validated in a RHEL 7.7. I wasn't able to use RHEL 8.x due to python v3 - I couldn't find any way to install python-ceph for python v3.
+====
+
+== 1. Create load in the cluster
+
+We are going to use cluster loader python application to create load on the cluster. To do so we need to install python in the machine where the `oc` commands will be run.
+
+----
+# RHEL 7.x
+yum install python-flask python-ceph python-boto3
+----
+
+Now we are going to clone the openshift svt project:
+
+----
+# git clone https://github.com/openshift/svt.git
+----
+
+We are going to use the cluster-loader python that is inside the dir `svt/openshift_scalability`:
+
+----
+# cd svt/openshift_scalability
+----
+
+Configure the scenario you want to create by editing the file pyconfig.yaml. Below is an example:
+
+----
+# cat <<EOF > pyconfig.yaml 
+projects:
+  - num: 20
+    basename: performancetest
+    ifexists: delete 
+    tuning: default
+    quota: default
+    services:
+      - num: 3
+        file: default
+        basename: testservice
+    rcs:
+      - num: 2
+        replicas: 5
+        file: default
+        basename: testrc
+        image: openshift/hello-openshift:v1.0.6
+    pods:
+      - total: 20
+      - num: 40
+        image: openshift/hello-openshift:v1.0.6
+        basename: hellopods
+        file: default
+        storage:
+          - type: none 
+      - num: 60
+        image: rhscl/python-34-rhel7:latest
+        basename: pyrhelpods
+        file: default
+
+quotas:
+  - name: default
+    file: default
+
+tuningsets:
+  - name: default
+    pods:
+      stepping:
+        stepsize: 5
+        pause: 10 s
+      rate_limit:
+        delay: 250 ms
+EOF
+
+----
+
+Now run the cluster-loader:
+
+----
+python cluster-loader.py -f pyconfig.yaml
+----
+
+To check the pods as they are created you can use the following command in another shell session:
+
+----
+watch 'oc get pods --all-namespaces | grep perftest | sort -k6 -h'
+----
